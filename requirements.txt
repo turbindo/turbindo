@@ -1,0 +1,27 @@
+# charset-normalizer
+# semantic-version
+pdoc
+setuptools-rust
+asyncssh
+imaplib2
+aiocron
+asyncssh
+transitions
+aiosqlite
+aiojobs
+jinja2
+aiodocker
+docker
+aiohttp==3.8.4
+python-box
+pyjwt
+pyyaml
+requests
+python-box
+aiosqlite
+PyYaml
+jinja2
+croniter
+cryptography
+setuptools
+# gremlinpython

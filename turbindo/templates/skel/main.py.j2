@@ -1,0 +1,93 @@
+import argparse
+import asyncio
+import importlib
+import sys
+from typing import Dict
+
+from turbindo.log.logger import Logger
+
+logger = Logger('main')
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    turbindo_context = "CLI"
+
+    logger = Logger('main')
+    parser.add_argument("--tests", help="run the testsuite", action="store_true", default=False)
+    parser.add_argument("--test_suite", help="specify test suite", type=str, default="*")
+    parser.add_argument("--test_case", help="specify test case from suite", default="*")
+    parser.add_argument("--run_app", help="run application", action="store_true", default=False)
+    parser.add_argument("--gen_accessors", help="generate accessors", type=str, default=False)
+
+    args = parser.parse_args()
+    if args.tests:
+        from {{ application_name }} import input_output as io
+        from {{ application_name }}.data import classes
+        from turbindo.configuration import TurbindoConfiguration
+        from turbindo.database.codegen import generate_data_accessors
+        from turbindo.database.impl import sqlite
+        from turbindo.test import test_system
+
+        config = TurbindoConfiguration().config
+        app_loop = asyncio.new_event_loop()
+        app_loop.run_until_complete(io.setup())
+
+        accessor_code: list = app_loop.run_until_complete(
+            generate_data_accessors(classes))
+        # print(accessor_code)
+
+        results: Dict[str, Exception] = app_loop.run_until_complete(
+            test_system.run_tests("apps.{{ application_name }}.tests",
+                                  args.test_suite,
+                                  args.test_case))
+        for n, e in results.items():
+            if e is None:
+                logger.log(f"{n}: Pass")
+            else:
+                logger.error(f"{n}: Fail")
+                logger.error(f"{e}")
+        app_loop.run_until_complete(sqlite.Sqlite.conn.close())
+        app_loop.stop()
+        app_loop.close()
+        sys.exit(0)
+
+    elif args.run_app:
+        from {{ application_name }} import input_output as io
+        from {{ application_name }}.data import classes
+        from turbindo.configuration import TurbindoConfiguration
+        from turbindo.database import initialize_database
+        from turbindo.database.codegen import generate_data_accessors
+        from turbindo.database.impl import sqlite
+        from turbindo.test import test_system
+        from {{ application_name }}.application import {{ application_class }}
+
+        config = TurbindoConfiguration().config
+        app_loop = asyncio.new_event_loop()
+        app_loop.run_until_complete(io.setup())
+
+        app_loop.run_until_complete(initialize_database(config, config.db.sqlite.storage_file, classes))
+
+        accessor_code: list = app_loop.run_until_complete(
+            generate_data_accessors(classes))
+
+        app_inst = {{ application_class }}(app_loop)
+        app_loop.run_until_complete(app_inst.start())
+        app_loop.run_forever()
+        app_loop.run_until_complete(sqlite.Sqlite.conn.close())
+        app_loop.stop()
+        app_loop.close()
+        sys.exit(0)
+
+    elif args.gen_accessors:
+        app_loop = asyncio.new_event_loop()
+        from {{ application_name }}.data import classes
+        from turbindo.database.codegen import generate_data_accessors
+        module = importlib.import_module(classes.__name__)
+        results = app_loop.run_until_complete(generate_data_accessors(module))
+        open(args.gen_accessors, "w").write(results)
+        sys.exit(0)
+
+
+if __name__ == '__main__':
+    main()

@@ -1,0 +1,29 @@
+from aiohttp import web
+from turbindo.app import TurbindoApp
+from turbindo.configuration import TurbindoConfiguration
+from turbindo.database import initialize_database, run_database_updates
+from turbindo.log.logger import Logger
+from turbindo.runtime import scheduler
+from turbindo.server.http import start_http
+
+from {{ application_name }}.data import classes as infra_data_classes
+from {{ application_name }} import input_output as io
+from {{ application_name }}.server.http import default_handler, sms_handler, call_handler, call_status_handler
+from {{ application_name }}.jobs import periodic
+
+class {{ application_class }}(TurbindoApp):
+    def __init__(self, loop):
+        self.config = TurbindoConfiguration().config
+        self.loop = loop
+        self.logger = Logger({{ application_class }}.__name__)
+        super().__init__()
+
+    async def start(self):
+        sprout_context = "{{ application_class }}:start"
+        await io.setup()
+        await initialize_database(self.config, self.config.db.sqlite.storage_file, infra_data_classes)
+        await run_database_updates(yaml_file=self.config.db.sqlite.updates_file)
+        await scheduler.SchedulerState.setup()
+        cron = await scheduler.setup_scheduler(self.config.cron.schedule, periodic)
+        await start_http(8088,
+                         [web.get('/', default_handler)])
